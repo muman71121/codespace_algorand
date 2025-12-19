@@ -1,3 +1,6 @@
+/* eslint-disable no-console */
+/* eslint-disable no-inner-declarations */
+/* eslint-disable prettier/prettier */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useEffect, useState } from 'react'
 import algosdk from 'algosdk'
@@ -11,30 +14,14 @@ import { registeredInstitutions } from '../utils/registeredinstitutions'
 // Network config
 import { algodClient, ASSETS } from '../configure/network' // ✅ updated import path and ASSETS
 
+// Encryption & hash helpers (moved from this file)
+import { aesGcmEncryptJSON, computeAssetMetadataHash } from '../components/encrypt'
+
 // SaaS Fee Config (same as original semester proforma)
 const USDC_ID = ASSETS.USDC
 const USDC_DECIMALS = 6
 const FEE_AMOUNT = 1 * 10 ** USDC_DECIMALS // 1 USDC per student
 const FEE_RECEIVER = 'CRL73DO2N6HT25UJVAF3VKSIXELBDOIQBZ44LTQCLYBLRCAHRYJBUNOVZQ'
-
-// ---------- Crypto Helpers (AES-GCM-256 with key derived from seat number) ----------
-async function deriveAesKeyFromSeat(seatNumber: string): Promise<CryptoKey> {
-  const material = new TextEncoder().encode(seatNumber.trim())
-  const hash = await crypto.subtle.digest('SHA-256', material)
-  return crypto.subtle.importKey('raw', hash, 'AES-GCM', false, ['encrypt'])
-}
-
-function toBase64(u8: Uint8Array): string {
-  return btoa(String.fromCharCode(...u8))
-}
-
-async function aesGcmEncryptJSON(plainObj: any, seatNumber: string): Promise<{ ivB64: string; cipherB64: string }> {
-  const key = await deriveAesKeyFromSeat(seatNumber)
-  const iv = crypto.getRandomValues(new Uint8Array(12))
-  const plaintext = new TextEncoder().encode(JSON.stringify(plainObj))
-  const cipherBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext)
-  return { ivB64: toBase64(iv), cipherB64: toBase64(new Uint8Array(cipherBuf)) }
-}
 
 // ---------- Component ----------
 type Props = { wallet: { wallet: string; name: string } | null; goBack: () => void }
@@ -57,7 +44,9 @@ export default function SemesterProformaBatchMint({ wallet, goBack }: Props) {
   useEffect(() => {
     if (wallet?.wallet || activeAddress) {
       const address = wallet?.wallet || activeAddress || ''
-      const match = registeredInstitutions.find((inst) => inst.wallet.toLowerCase() === address.toLowerCase())
+      const match = registeredInstitutions.find(
+        (inst) => inst.wallet.toLowerCase() === address.toLowerCase(),
+      )
       setConnectedInstitution(match ? match.name : null)
     }
   }, [wallet, activeAddress])
@@ -96,7 +85,9 @@ export default function SemesterProformaBatchMint({ wallet, goBack }: Props) {
 
       const headersRow: string[] = (json[0] || []).map((h: any) => (h ? String(h) : ''))
       const headerMap: Record<string, number> = {}
-      headersRow.forEach((h: any, idx: number) => (headerMap[normalizeHeader(String(h || ''))] = idx))
+      headersRow.forEach(
+        (h: any, idx: number) => (headerMap[normalizeHeader(String(h || ''))] = idx),
+      )
 
       const missing: string[] = []
       for (const rc of REQUIRED_COLUMNS) {
@@ -116,10 +107,20 @@ export default function SemesterProformaBatchMint({ wallet, goBack }: Props) {
         }
         for (const k of Object.keys(obj)) obj[k] = String(obj[k] ?? '').trim()
 
-        const nonCourseKeys = ['serialnumber', 'seatnumber', 'studentname', 'fathersname', 'department', 'degreetitle', 'semesternumber']
+        const nonCourseKeys = [
+          'serialnumber',
+          'seatnumber',
+          'studentname',
+          'fathersname',
+          'department',
+          'degreetitle',
+          'semesternumber',
+        ]
         const emptyNonCourse = nonCourseKeys.filter((k) => obj[k] === '')
         if (emptyNonCourse.length > 0) {
-          throw new Error(`Row ${r + 1} has empty required columns: ${emptyNonCourse.join(', ')}`)
+          throw new Error(
+            `Row ${r + 1} has empty required columns: ${emptyNonCourse.join(', ')}`,
+          )
         }
 
         const courses: { courseName: string; courseNumber: string; marks: number }[] = []
@@ -159,8 +160,9 @@ export default function SemesterProformaBatchMint({ wallet, goBack }: Props) {
         const params = await algodClient.getTransactionParams().do() // ✅ use config.algodClient
         const txns: algosdk.Transaction[] = []
 
-        // ✅ Only charge fee if the institution is NOT feeExempt
-        const matchedInstitution = registeredInstitutions.find((inst) => inst.name === connectedInstitution)
+        const matchedInstitution = registeredInstitutions.find(
+          (inst) => inst.name === connectedInstitution,
+        )
         if (!matchedInstitution?.feeExempt) {
           const feeTxn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
             sender: activeAddress!,
@@ -171,11 +173,10 @@ export default function SemesterProformaBatchMint({ wallet, goBack }: Props) {
           })
           txns.push(feeTxn)
         } else {
-          // eslint-disable-next-line no-console
           console.log(`💡 Fee skipped for ${connectedInstitution}`)
         }
 
-        const batchAssetNames: string[] = [] // store asset names aligned with transactions
+        const batchAssetNames: string[] = []
 
         for (const row of batchRows) {
           const universityName = connectedInstitution || ''
@@ -189,16 +190,18 @@ export default function SemesterProformaBatchMint({ wallet, goBack }: Props) {
             courses: row['parsedCourses'],
           }
 
-          const { ivB64, cipherB64 } = await aesGcmEncryptJSON(payloadPlain, String(row['seatnumber']))
-
-          // Compute sha256 hash digest (raw bytes for assetMetadataHash)
-          const hashInput = `${String(row['studentname']).trim().toLowerCase()}|${universityName.trim().toLowerCase()}|${String(
-            row['seatnumber'],
+          // ✅ replaced local encryption with imported helper
+          const { ivB64, cipherB64 } = await aesGcmEncryptJSON(
+            payloadPlain,
+            String(row['seatnumber']),
           )
-            .trim()
-            .toLowerCase()}|${String(row['semesternumber']).trim()}`
-          const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(hashInput))
-          const metadataHash = new Uint8Array(hashBuffer)
+
+          const metadataHash = await computeAssetMetadataHash(
+            String(row['studentname']),
+            universityName,
+            String(row['seatnumber']),
+            String(row['semesternumber']),
+          )
 
           const metadata = {
             standard: 'arc69',
@@ -208,8 +211,6 @@ export default function SemesterProformaBatchMint({ wallet, goBack }: Props) {
             },
           }
 
-          // Helper: get initials from university name
-          // eslint-disable-next-line no-inner-declarations
           function getInitials(name: string): string {
             return name
               .split(' ')
@@ -240,22 +241,24 @@ export default function SemesterProformaBatchMint({ wallet, goBack }: Props) {
           txns.push(nftTxn)
         }
 
-        // ----------------- Edited Signing & Minting Loop -----------------
         const encodedUnsigned = txns.map((t) => algosdk.encodeUnsignedTransaction(t))
         const signedBlobs = await signTransactions(encodedUnsigned)
-        if (!signedBlobs || signedBlobs.length === 0) throw new Error('Batch signing failed')
+        if (!signedBlobs || signedBlobs.length === 0)
+          throw new Error('Batch signing failed')
 
-        const feeOffset = !matchedInstitution?.feeExempt ? 1 : 0 // skip fee txn
+        const feeOffset = !matchedInstitution?.feeExempt ? 1 : 0
 
         for (let k = 0; k < signedBlobs.length; k++) {
           const signed = signedBlobs[k]
           if (!signed) throw new Error('A transaction was not signed')
-          const { txid } = await algodClient.sendRawTransaction(signed).do() // ✅ use config.algodClient
-          const conf = await algosdk.waitForConfirmation(algodClient, txid, 4) // ✅ use config.algodClient
+          const { txid } = await algodClient.sendRawTransaction(signed).do()
+          const conf = await algosdk.waitForConfirmation(algodClient, txid, 4)
 
           if (k >= feeOffset) {
             const createdAssetId =
-              (conf as any)['asset-index'] || (conf as any)['assetIndex'] || (conf as any)['inner-txns']?.[0]?.['created-asset-id']
+              (conf as any)['asset-index'] ||
+              (conf as any)['assetIndex'] ||
+              (conf as any)['inner-txns']?.[0]?.['created-asset-id']
 
             const rowIndex = i + (k - feeOffset)
             const studentRow = rows[rowIndex]
@@ -319,12 +322,14 @@ export default function SemesterProformaBatchMint({ wallet, goBack }: Props) {
       XLSX.utils.book_append_sheet(outWb, outWs, 'minted')
 
       const wbout = XLSX.write(outWb, { type: 'array', bookType: 'xlsx' })
-      saveAs(new Blob([wbout], { type: 'application/octet-stream' }), 'semester_mint_results.xlsx')
+      saveAs(
+        new Blob([wbout], { type: 'application/octet-stream' }),
+        'semester_mint_results.xlsx',
+      )
 
-      alert(`✅ Minting completed. ${results.length} NFTs minted.`)
+      alert(` Minting completed. ${results.length} NFTs minted.`)
       goBack()
     } catch (err: any) {
-      // eslint-disable-next-line no-console
       console.error(err)
       setError(err?.message || 'Failed to process file and mint NFTs')
     } finally {
@@ -334,19 +339,28 @@ export default function SemesterProformaBatchMint({ wallet, goBack }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-xl font-bold mb-2">📘 Batch Mint Semester Proforma NFTs (Excel Upload)</h2>
+      <h2 className="text-xl font-bold mb-2">
+        📘 Batch Mint Semester Proforma NFTs (Excel Upload)
+      </h2>
 
       <div className="text-sm text-gray-700">
         <strong>Connected Institution:</strong>
         <br />
-        <code className="bg-gray-100 p-2 rounded block">{connectedInstitution || '❌ Not a registered institution'}</code>
+        <code className="bg-gray-100 p-2 rounded block">
+          {connectedInstitution || '❌ Not a registered institution'}
+        </code>
       </div>
 
       {!connectedInstitution ? (
-        <div className="text-red-600 mt-2">This wallet is not registered. Minting is disabled.</div>
+        <div className="text-red-600 mt-2">
+          This wallet is not registered. Minting is disabled.
+        </div>
       ) : (
         <>
-          <p className="text-sm">Upload an Excel file (.xlsx) with these headers (order doesn't matter):</p>
+          <p className="text-sm">
+            Upload an Excel file (.xlsx) with these headers (order doesn't
+            matter):
+          </p>
           <ul className="text-xs list-disc ml-6">
             <li>Serial number</li>
             <li>Seat number</li>
@@ -383,7 +397,13 @@ export default function SemesterProformaBatchMint({ wallet, goBack }: Props) {
               </div>
               <div className="w-full bg-gray-200 rounded h-3 mt-1">
                 <div
-                  style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }}
+                  style={{
+                    width: `${
+                      progress.total
+                        ? (progress.done / progress.total) * 100
+                        : 0
+                    }%`,
+                  }}
                   className="h-3 rounded bg-blue-600"
                 />
               </div>
@@ -392,7 +412,10 @@ export default function SemesterProformaBatchMint({ wallet, goBack }: Props) {
 
           {error && <div className="text-red-600 mt-2">Error: {error}</div>}
 
-          <button onClick={goBack} className="mt-4 bg-gray-300 text-gray-800 py-2 rounded hover:bg-gray-400">
+          <button
+            onClick={goBack}
+            className="mt-4 bg-gray-300 text-gray-800 py-2 rounded hover:bg-gray-400"
+          >
             Go Back
           </button>
         </>

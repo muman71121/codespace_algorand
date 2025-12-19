@@ -1,48 +1,52 @@
+/* eslint-disable prettier/prettier */
 /* eslint-disable no-console */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useEffect, useState } from 'react'
-import algosdk from 'algosdk'
-import { useWallet } from '@txnlab/use-wallet-react'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
+import algosdk from 'algosdk'
+import { useWallet } from '@txnlab/use-wallet-react'
 
-// Registered institutions (imported instead of hardcoded)
+// ✅ Registered institutions
 import { registeredInstitutions } from '../utils/registeredinstitutions'
 
-// ✅ Import network configuration and assets
-import { CONFIG, ASSETS } from '../configure/network'
+// Network config
+import { algodClient, ASSETS } from '../configure/network' // ✅ updated import path and ASSETS
 
+// ✅ Encryption helper
+import { getDegreeHash, aesGcmEncryptJSON } from '../components/encrypt'
+
+// ---------- USDC Fee Config ----------
 const USDC_ID = ASSETS.USDC
 const USDC_DECIMALS = 6
-const FEE_AMOUNT = 5 * 10 ** USDC_DECIMALS // 5 USDC per student
+const FEE_AMOUNT = 5 * 10 ** USDC_DECIMALS // 1 USDC per student
 const FEE_RECEIVER = 'CRL73DO2N6HT25UJVAF3VKSIXELBDOIQBZ44LTQCLYBLRCAHRYJBUNOVZQ'
+
+// ---------- Required Columns ----------
+const REQUIRED_COLUMNS = [
+  'serialnumber',
+  'studentseatnumber',
+  'studentname',
+  'fathername',
+  'yearofgraduation',
+  'nameoffaculty',
+  'nameofdepartment',
+  'degreetitle',
+  'finalpercentage',
+]
 
 type MintDegreeFormProps = {
   wallet: { wallet: string; name: string } | null
   goBack: () => void
 }
 
-// 🔑 Hash format aligned with VerifyDegreeForm
-function formatDegreeData(
-  studentName: string,
-  universityName: string,
-  gradYear: string,
-  degreeTitle: string,
-  seatNumber: string,
-  percentage: string,
-) {
-  return `${studentName.trim().toLowerCase()}|${universityName.trim().toLowerCase()}|${gradYear.trim()}|${degreeTitle.trim().toLowerCase()}|${seatNumber.trim().toLowerCase()}|${percentage}`
-}
-
 function normalizeHeader(h: string) {
   return h.replace(/\s+/g, '').toLowerCase()
 }
 
-function MintDegreeForm({ wallet, goBack }: MintDegreeFormProps) {
+export default function MintDegreeForm({ wallet, goBack }: MintDegreeFormProps) {
   const { activeAddress, signTransactions } = useWallet()
-
   const [connectedInstitution, setConnectedInstitution] = useState<string | null>(null)
-  const [_university, setUniversity] = useState('')
   const [loading, setLoading] = useState(false)
   const [progress, setProgress] = useState({ total: 0, done: 0 })
   const [error, setError] = useState<string | null>(null)
@@ -50,25 +54,16 @@ function MintDegreeForm({ wallet, goBack }: MintDegreeFormProps) {
   useEffect(() => {
     if (wallet?.wallet || activeAddress) {
       const address = wallet?.wallet || activeAddress || ''
-      const match = registeredInstitutions.find((inst) => inst.wallet.toLowerCase() === address.toLowerCase())
+      const match = registeredInstitutions.find(
+        (inst) => inst.wallet.toLowerCase() === address.toLowerCase()
+      )
       setConnectedInstitution(match ? match.name : null)
-      setUniversity(match ? match.name : '')
     }
   }, [wallet, activeAddress])
 
-  const REQUIRED_COLUMNS = [
-    'serialnumber',
-    'studentseatnumber',
-    'studentname',
-    'fathersname',
-    'yearofgraduation',
-    'nameoffaculty',
-    'nameofdepartment',
-    'degreetitle',
-    'finalpercentage',
-  ]
-
   const handleFile = async (file: File) => {
+    if (!activeAddress || !signTransactions) return
+
     setError(null)
     setLoading(true)
     setProgress({ total: 0, done: 0 })
@@ -79,9 +74,9 @@ function MintDegreeForm({ wallet, goBack }: MintDegreeFormProps) {
       const sheetName = workbook.SheetNames[0]
       const worksheet = workbook.Sheets[sheetName]
       const json = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1 })
-
       if (!json || json.length === 0) throw new Error('Empty spreadsheet')
 
+      // Map headers
       const headersRow: string[] = (json[0] || []).map((h: any) => (h ? String(h) : ''))
       const headerMap: Record<string, number> = {}
       headersRow.forEach((h, idx) => (headerMap[normalizeHeader(String(h || ''))] = idx))
@@ -90,10 +85,9 @@ function MintDegreeForm({ wallet, goBack }: MintDegreeFormProps) {
       for (const rc of REQUIRED_COLUMNS) {
         if (headerMap[rc] === undefined) missing.push(rc)
       }
-      if (missing.length > 0) {
-        throw new Error(`Missing required columns: ${missing.join(', ')}`)
-      }
+      if (missing.length > 0) throw new Error(`Missing required columns: ${missing.join(', ')}`)
 
+      // Parse rows
       const rows: any[] = []
       for (let r = 1; r < json.length; r++) {
         const row = json[r]
@@ -103,35 +97,17 @@ function MintDegreeForm({ wallet, goBack }: MintDegreeFormProps) {
           obj[key] = row[headerMap[key]] !== undefined ? row[headerMap[key]] : ''
         }
         for (const k of Object.keys(obj)) obj[k] = String(obj[k] ?? '').trim()
-
-        // ✅ Check for any empty field in the row
         const emptyFields = Object.entries(obj).filter(([_, val]) => val === '')
-        if (emptyFields.length > 0) {
-          throw new Error(`Row ${r + 1} has empty fields: ${emptyFields.map(([k]) => k).join(', ')}`)
-        }
-
+        if (emptyFields.length > 0) throw new Error(`Row ${r + 1} has empty fields: ${emptyFields.map(([k]) => k).join(', ')}`)
         rows.push(obj)
       }
 
-      if (rows.length === 0) throw new Error('No student rows found in the spreadsheet')
-
-      // ✅ Use CONFIG from network.ts
-      const algodClient = new algosdk.Algodv2(CONFIG.algodToken, CONFIG.algodServer, CONFIG.algodPort)
-
-      const results: {
-        university: string
-        year: string
-        degreeTitle: string
-        percentage: string
-        name: string
-        assetId?: number
-        txId?: string
-        serial?: number
-      }[] = []
-
-      const BATCH_SIZE = 16
+      if (!connectedInstitution) throw new Error('Not a registered institution')
       setProgress({ total: rows.length, done: 0 })
 
+      // ---------- Batch Minting Logic ----------
+      const results: any[] = []
+      const BATCH_SIZE = 16
       for (let i = 0; i < rows.length; i += BATCH_SIZE) {
         const batchRows = rows.slice(i, i + BATCH_SIZE)
         const params = await algodClient.getTransactionParams().do()
@@ -139,6 +115,7 @@ function MintDegreeForm({ wallet, goBack }: MintDegreeFormProps) {
 
         const matchedInstitution = registeredInstitutions.find((inst) => inst.name === connectedInstitution)
 
+        // Fee transaction if applicable
         if (!matchedInstitution?.feeExempt) {
           const feeTxn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
             sender: activeAddress!,
@@ -152,38 +129,59 @@ function MintDegreeForm({ wallet, goBack }: MintDegreeFormProps) {
           console.log(`💡 Fee skipped for ${connectedInstitution}`)
         }
 
+        const batchAssetNames: string[] = []
+
         for (const row of batchRows) {
-          const dataString = formatDegreeData(
-            String(row['studentname'] || ''),
-            connectedInstitution || '',
-            String(row['yearofgraduation'] || ''),
-            String(row['degreetitle'] || ''),
-            String(row['studentseatnumber'] || ''),
-            String(row['finalpercentage'] || ''),
+          const payloadPlain = {
+            seatNumber: String(row['studentseatnumber']),
+            studentName: String(row['studentname']),
+            fathersName: String(row['fathername']),
+            year: String(row['yearofgraduation']),
+            faculty: String(row['nameoffaculty']),
+            department: String(row['nameofdepartment']),
+            degreeTitle: String(row['degreetitle']),
+            percentage: String(row['finalpercentage']),
+          }
+
+          const { ivB64, cipherB64 } = await aesGcmEncryptJSON(payloadPlain, String(row['studentseatnumber']))
+          const metadataHash = await getDegreeHash(
+            String(row['studentname']),
+            connectedInstitution,
+            String(row['yearofgraduation']),
+            String(row['degreetitle']),
+            String(row['studentseatnumber']),
+            String(row['finalpercentage'])
           )
 
-          const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(dataString))
-          const hashBytes = new Uint8Array(hashBuffer)
+          const metadata = {
+            standard: 'arc69',
+            description: 'Degree NFT (Privacy-Preserving)',
+            properties: { enc: { alg: 'AES-GCM-256', iv: ivB64, ciphertext: cipherB64 } },
+          }
+
+          const assetName = `${row['degreetitle']} - Degree NFT`
+          batchAssetNames.push(assetName)
 
           const nftTxn = algosdk.makeAssetCreateTxnWithSuggestedParamsFromObject({
             sender: activeAddress!,
             total: 1,
             decimals: 0,
-            assetName: `${String(row['degreetitle'] || 'Degree').trim()} - Degree NFT`,
+            assetName,
             unitName: 'DEGREE',
             assetURL: '',
+            note: new TextEncoder().encode(JSON.stringify(metadata)),
             defaultFrozen: false,
             suggestedParams: params,
-            assetMetadataHash: hashBytes,
+            assetMetadataHash: metadataHash,
           })
-
           txns.push(nftTxn)
         }
 
         const encodedUnsigned = txns.map((t) => algosdk.encodeUnsignedTransaction(t))
         const signedBlobs = await signTransactions(encodedUnsigned)
-
         if (!signedBlobs || signedBlobs.length === 0) throw new Error('Batch signing failed')
+
+        const feeOffset = !matchedInstitution?.feeExempt ? 1 : 0
 
         for (let k = 0; k < signedBlobs.length; k++) {
           const signed = signedBlobs[k]
@@ -191,21 +189,28 @@ function MintDegreeForm({ wallet, goBack }: MintDegreeFormProps) {
           const { txid } = await algodClient.sendRawTransaction(signed).do()
           const conf = await algosdk.waitForConfirmation(algodClient, txid, 4)
 
-          if (k >= 1) {
+          if (k >= feeOffset) {
             const createdAssetId =
-              (conf as any)['asset-index'] || (conf as any)['assetIndex'] || (conf as any)['inner-txns']?.[0]?.['created-asset-id']
-            const rowIndex = i + (k - 1)
+              (conf as any)['asset-index'] ||
+              (conf as any)['assetIndex'] ||
+              (conf as any)['inner-txns']?.[0]?.['created-asset-id']
+
+            const rowIndex = i + (k - feeOffset)
             const studentRow = rows[rowIndex]
+            const mintedAssetName = batchAssetNames[k - feeOffset]
 
             results.push({
+              seat: String(studentRow['studentseatnumber'] || ''),
               name: String(studentRow['studentname'] || ''),
-              assetId: createdAssetId ? Number(createdAssetId) : undefined,
-              txId: txid,
-              serial: Number(studentRow['serialnumber'] || 0),
+              father: String(studentRow['fathername'] || ''),
               university: connectedInstitution || '',
-              year: String(studentRow['yearofgraduation'] || ''),
               degreeTitle: String(studentRow['degreetitle'] || ''),
+              year: String(studentRow['yearofgraduation'] || ''),
               percentage: String(studentRow['finalpercentage'] || ''),
+              assetName: mintedAssetName,
+              assetId: createdAssetId ? Number(createdAssetId) : undefined,
+              txid,
+              serial: Number(studentRow['serialnumber'] || 0),
             })
 
             setProgress((p) => ({ total: p.total, done: p.done + 1 }))
@@ -215,26 +220,27 @@ function MintDegreeForm({ wallet, goBack }: MintDegreeFormProps) {
         await new Promise((res) => setTimeout(res, 300))
       }
 
-      const outRows = [['Serial', 'Student Name', 'University', 'Year', 'Degree Title', 'Percentage', 'Asset ID', 'Tx ID']]
+      // ---------- Export Results to Excel ----------
+      const outRows = [['Serial', 'Seat Number', 'Student Name', 'Father', 'University', 'Degree Title', 'Year', 'Percentage', 'Asset Name', 'Asset ID', 'Tx ID']]
       results.sort((a, b) => (a.serial || 0) - (b.serial || 0))
-
       for (const r of results) {
         outRows.push([
           String(r.serial ?? ''),
+          String(r.seat ?? ''),
           String(r.name ?? ''),
+          String(r.father ?? ''),
           String(r.university ?? ''),
-          String(r.year ?? ''),
           String(r.degreeTitle ?? ''),
+          String(r.year ?? ''),
           String(r.percentage ?? ''),
+          String(r.assetName ?? ''),
           String(r.assetId ?? ''),
-          String(r.txId ?? ''),
+          String(r.txid ?? ''),
         ])
       }
-
       const outWb = XLSX.utils.book_new()
       const outWs = XLSX.utils.aoa_to_sheet(outRows)
       XLSX.utils.book_append_sheet(outWb, outWs, 'minted')
-
       const wbout = XLSX.write(outWb, { type: 'array', bookType: 'xlsx' })
       saveAs(new Blob([wbout], { type: 'application/octet-stream' }), 'mint_results.xlsx')
 
@@ -250,12 +256,12 @@ function MintDegreeForm({ wallet, goBack }: MintDegreeFormProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-xl font-bold mb-2">🎓 Batch Mint Degree NFTs (Excel Upload)</h2>
+      <h2 className="text-xl font-bold mb-2">Batch Mint Degree NFTs (Excel Upload)</h2>
 
       <div className="text-sm text-gray-700">
         <strong>Connected Institution:</strong>
         <br />
-        <code className="bg-gray-100 p-2 rounded block">{connectedInstitution || '❌ Not a registered institution'}</code>
+        <code className="bg-gray-100 p-2 rounded block">{connectedInstitution || 'Not a registered institution'}</code>
       </div>
 
       {!connectedInstitution ? (
@@ -264,15 +270,9 @@ function MintDegreeForm({ wallet, goBack }: MintDegreeFormProps) {
         <>
           <p className="text-sm">Upload an Excel file (.xlsx) with these headers (order doesn't matter):</p>
           <ul className="text-xs list-disc ml-6">
-            <li>Serial number</li>
-            <li>Student seat number</li>
-            <li>Student name</li>
-            <li>Father's name</li>
-            <li>Year of graduation</li>
-            <li>Name of faculty</li>
-            <li>Name of department</li>
-            <li>Degree title</li>
-            <li>Final percentage</li>
+            {REQUIRED_COLUMNS.map((c) => (
+              <li key={c}>{c}</li>
+            ))}
           </ul>
 
           <input
@@ -311,5 +311,3 @@ function MintDegreeForm({ wallet, goBack }: MintDegreeFormProps) {
     </div>
   )
 }
-
-export default MintDegreeForm
