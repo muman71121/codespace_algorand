@@ -14,17 +14,121 @@ import { registeredInstitutions } from '../utils/registeredinstitutions'
 // Network config
 import { algodClient, ASSETS } from '../configure/network' // ✅ updated import path and ASSETS
 
-// Encryption & hash helpers (moved from this file)
-import { aesGcmEncryptJSON, computeAssetMetadataHash } from '../components/encrypt'
+// -------------------- Degree Hash Helpers --------------------
+function formatDegreeData(
+  studentName: string,
+  universityName: string,
+  gradYear: string,
+  degreeTitle: string,
+  seatNumber: string,
+  percentage: string,
+) {
+  return `${studentName.trim().toLowerCase()}|${universityName
+    .trim()
+    .toLowerCase()}|${gradYear.trim()}|${degreeTitle
+    .trim()
+    .toLowerCase()}|${seatNumber.trim().toLowerCase()}|${percentage}`
+}
 
-// SaaS Fee Config (same as original semester proforma)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function getDegreeHash(
+  studentName: string,
+  universityName: string,
+  gradYear: string,
+  degreeTitle: string,
+  seatNumber: string,
+  percentage: string,
+): Promise<Uint8Array> {
+  const formatted = formatDegreeData(
+    studentName,
+    universityName,
+    gradYear,
+    degreeTitle,
+    seatNumber,
+    percentage,
+  )
+  const hashBuffer = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(formatted),
+  )
+  return new Uint8Array(hashBuffer)
+}
+
+// -------------------- AES-GCM Encryption Helpers --------------------
+async function deriveAesKeyFromSeat(
+  seatNumber: string,
+): Promise<CryptoKey> {
+  const material = new TextEncoder().encode(seatNumber.trim())
+  const hash = await crypto.subtle.digest('SHA-256', material)
+  return crypto.subtle.importKey(
+    'raw',
+    hash,
+    'AES-GCM',
+    false,
+    ['encrypt'],
+  )
+}
+
+function toBase64(u8: Uint8Array): string {
+  return btoa(String.fromCharCode(...u8))
+}
+
+/**
+ * Encrypt a JSON payload using AES-GCM-256 with key derived from seat number
+ */
+async function aesGcmEncryptJSON(
+  plainObj: any,
+  seatNumber: string,
+): Promise<{ ivB64: string; cipherB64: string }> {
+  const key = await deriveAesKeyFromSeat(seatNumber)
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const plaintext = new TextEncoder().encode(JSON.stringify(plainObj))
+  const cipherBuf = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    plaintext,
+  )
+  return {
+    ivB64: toBase64(iv),
+    cipherB64: toBase64(new Uint8Array(cipherBuf)),
+  }
+}
+
+/**
+ * Compute assetMetadataHash from student/university/semester info
+ */
+async function computeAssetMetadataHash(
+  studentName: string,
+  universityName: string,
+  seatNumber: string,
+  semester: string,
+): Promise<Uint8Array> {
+  const hashInput = `${studentName
+    .trim()
+    .toLowerCase()}|${universityName
+    .trim()
+    .toLowerCase()}|${seatNumber
+    .trim()
+    .toLowerCase()}|${semester.trim()}`
+  const hashBuffer = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(hashInput),
+  )
+  return new Uint8Array(hashBuffer)
+}
+
+// ---------- USDC Fee Config ----------
 const USDC_ID = ASSETS.USDC
 const USDC_DECIMALS = 6
 const FEE_AMOUNT = 1 * 10 ** USDC_DECIMALS // 1 USDC per student
-const FEE_RECEIVER = 'CRL73DO2N6HT25UJVAF3VKSIXELBDOIQBZ44LTQCLYBLRCAHRYJBUNOVZQ'
+const FEE_RECEIVER =
+  'CRL73DO2N6HT25UJVAF3VKSIXELBDOIQBZ44LTQCLYBLRCAHRYJBUNOVZQ'
 
 // ---------- Component ----------
-type Props = { wallet: { wallet: string; name: string } | null; goBack: () => void }
+type Props = {
+  wallet: { wallet: string; name: string } | null
+  goBack: () => void
+}
 
 // Normalize header by removing non-alphanumeric and lowercasing
 function normalizeHeader(h: string) {
@@ -33,10 +137,14 @@ function normalizeHeader(h: string) {
     .toLowerCase()
 }
 
-export default function SemesterProformaBatchMint({ wallet, goBack }: Props) {
+export default function SemesterProformaBatchMint({
+  wallet,
+  goBack,
+}: Props) {
   const { activeAddress, signTransactions } = useWallet()
 
-  const [connectedInstitution, setConnectedInstitution] = useState<string | null>(null)
+  const [connectedInstitution, setConnectedInstitution] =
+    useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [progress, setProgress] = useState({ total: 0, done: 0 })
   const [error, setError] = useState<string | null>(null)
@@ -45,7 +153,8 @@ export default function SemesterProformaBatchMint({ wallet, goBack }: Props) {
     if (wallet?.wallet || activeAddress) {
       const address = wallet?.wallet || activeAddress || ''
       const match = registeredInstitutions.find(
-        (inst) => inst.wallet.toLowerCase() === address.toLowerCase(),
+        (inst) =>
+          inst.wallet.toLowerCase() === address.toLowerCase(),
       )
       setConnectedInstitution(match ? match.name : null)
     }
@@ -173,7 +282,7 @@ export default function SemesterProformaBatchMint({ wallet, goBack }: Props) {
           })
           txns.push(feeTxn)
         } else {
-          console.log(`💡 Fee skipped for ${connectedInstitution}`)
+          console.log(` Fee skipped for ${connectedInstitution}`)
         }
 
         const batchAssetNames: string[] = []
@@ -340,14 +449,14 @@ export default function SemesterProformaBatchMint({ wallet, goBack }: Props) {
   return (
     <div className="flex flex-col gap-4">
       <h2 className="text-xl font-bold mb-2">
-        📘 Batch Mint Semester Proforma NFTs (Excel Upload)
+         Batch Mint Semester Proforma NFTs (Excel Upload)
       </h2>
 
       <div className="text-sm text-gray-700">
         <strong>Connected Institution:</strong>
         <br />
         <code className="bg-gray-100 p-2 rounded block">
-          {connectedInstitution || '❌ Not a registered institution'}
+          {connectedInstitution || ' Not a registered institution'}
         </code>
       </div>
 
