@@ -4,11 +4,15 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { getAlgodConfigFromViteEnvironment } from './utils/network/getAlgoClientConfigs'
 
 // Pages
-import Home from './pages/home' // new landing page
-import AlgoCredDashboard from './pages/credichain' // your old Home.tsx renamed
-import LMS from './pages/lms' // new LMS/ERP page
+import Home from './pages/home'
+import ExperienceDashboard from './pages/Letter-Chained' // renamed conceptually
+import LMS from './pages/lms'
 
-const supportedWallets: SupportedWallet[] = [{ id: WalletId.PERA }, { id: WalletId.DEFLY }, { id: WalletId.EXODUS }]
+const supportedWallets: SupportedWallet[] = [
+  { id: WalletId.PERA },
+  { id: WalletId.DEFLY },
+  { id: WalletId.EXODUS }
+]
 
 export default function App() {
   const algodConfig = getAlgodConfigFromViteEnvironment()
@@ -36,7 +40,7 @@ export default function App() {
         <Router>
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/credichain" element={<AlgoCredDashboard />} />
+            <Route path="/dashboard" element={<ExperienceDashboard />} />
             <Route path="/lms" element={<LMS />} />
           </Routes>
         </Router>

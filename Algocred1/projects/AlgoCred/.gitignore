@@ -37,3 +37,14 @@ yarn-error.log*
 .vercel
 .netlify
 .ipynb_checkpoints/
+
+# python
+venv/
+.venv/
+env/
+
+# system
+.DS_Store
+
+# logs
+*.log
