@@ -1,6 +1,6 @@
 import { AlgoClientConfig } from '@algorandfoundation/algokit-utils/types/network-client'
-type TokenHeader = Record<string, string>
-export type { TokenHeader }
+import type { TokenHeader } from 'algosdk/dist/types/client/urlTokenBaseHTTPClient'
+
 export interface AlgoViteClientConfig extends AlgoClientConfig {
   /** Base URL of the server e.g. http://localhost, https://testnet-api.algonode.cloud/, etc. */
   server: string
