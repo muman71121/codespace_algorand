@@ -3,9 +3,9 @@ import React from 'react'
 const PartnerInstitutions: React.FC = () => {
   return (
     <div className="p-6">
-      <h2 className="text-2xl font-bold text-purple-800 mb-6 text-center">Partner Institutions</h2>
+      <h2 className="text-2xl font-bold text-purple-800 mb-6 text-center">Partner Companies</h2>
       <p className="text-gray-600 text-center mb-10">
-        Academic institutions collaborating with AlgoCred to pioneer blockchain-based credentialing.
+        Companies collaborating with Letter-Chained to pioneer blockchain-based credentialing.
       </p>
 
       <div className="flex flex-wrap justify-center gap-8 max-w-6xl mx-auto">

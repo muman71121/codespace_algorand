@@ -72,7 +72,7 @@ export default function Home() {
                     setMenuOpen(false)
                   }}
                 >
-                  Partner Institutions
+                  Partner Companies
                 </button>
               </div>
             )}
