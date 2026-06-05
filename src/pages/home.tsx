@@ -397,6 +397,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   modalBody: {
-    padding: 20,
+  padding: 20,
+  maxHeight: '70vh',
+  overflowY: 'auto',
   },
 }
