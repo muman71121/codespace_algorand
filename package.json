@@ -1,5 +1,6 @@
 {
-  "name": "credichain",
+  "name": "letter-chained",
+  "description": "Letter-Chained blockchain verification system",
   "version": "0.1.0",
   "author": {
     "name": "muman21",
