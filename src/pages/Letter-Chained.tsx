@@ -130,7 +130,7 @@ const CrediChain: React.FC = () => {
         </h1>
 
         <p style={styles.text}>
-          A blockchain-based infrastructure for issuing and verifying professional experience letters.
+          A Blockchain-based infrastructure for issuing and verifying professional experience letters.
           It eliminates ambiguity, prevents falsification, and establishes permanent trust in employment records.
         </p>
       </section>
