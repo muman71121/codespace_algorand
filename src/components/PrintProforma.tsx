@@ -204,37 +204,10 @@ const metadata = JSON.parse(noteStr)
       />
 
       <input
-        className="border p-2 w-full mb-2"
-        placeholder="Full Name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
-
-      <input
         type="date"
         className="border p-2 w-full mb-2"
         value={dob}
         onChange={(e) => setDob(e.target.value)}
-      />
-
-      <select
-        className="border p-2 w-full mb-2"
-        value={company}
-        onChange={(e) => setCompany(e.target.value)}
-      >
-        <option value="">Select Company</option>
-        {registeredInstitutions.map((i) => (
-          <option key={i.wallet} value={i.name}>
-            {i.name}
-          </option>
-        ))}
-      </select>
-
-      <input
-        className="border p-2 w-full mb-2"
-        placeholder="Job Title"
-        value={jobTitle}
-        onChange={(e) => setJobTitle(e.target.value)}
       />
 
       <button
