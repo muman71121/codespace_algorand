@@ -265,8 +265,7 @@ const metadata = JSON.parse(noteStr)
 
             <p className="mb-4">
               This is to certify that{' '}
-              <b>{data.name}</b> (Date of Birth:{' '}
-              <b>{dob}</b>) was employed with{' '}
+              <b>{data.name}</b> was employed with{' '}
               <b>{institutionName}</b>.
             </p>
 
