@@ -2,8 +2,8 @@ import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useWallet } from '@txnlab/use-wallet-react'
 
-import MintDegreeForm from '../components/MintDegreeForm'
-import VerifyDegreeForm from '../components/VerifyDegreeForm'
+import SemesterProformaBatchMint from '../components/SemesterProforma'
+import PrintProforma from '../components/PrintProforma'
 import PartnerInstitutions from '../components/PartnerInstitutions'
 import ConnectWallet from '../components/ConnectWallet'
 import { registeredInstitutions } from '../utils/registeredinstitutions'
@@ -15,8 +15,8 @@ export default function Home() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [openCompanyModal, setOpenCompanyModal] = useState(false)
 
-  const [showMint, setShowMint] = useState(false)
-  const [showVerify, setShowVerify] = useState(false)
+  const [showProforma, setShowProforma] = useState(false)
+  const [showPrintProforma, setShowPrintProforma] = useState(false)
   const [showPartners, setShowPartners] = useState(false)
 
   const matchedInstitution =
@@ -48,7 +48,7 @@ export default function Home() {
                 <button
                   style={styles.item}
                   onClick={() => {
-                    setShowMint(true)
+                    setShowProforma(true)
                     setMenuOpen(false)
                   }}
                 >
@@ -58,7 +58,7 @@ export default function Home() {
                 <button
                   style={styles.item}
                   onClick={() => {
-                    setShowVerify(true)
+                    setShowPrintProforma(true)
                     setMenuOpen(false)
                   }}
                 >
@@ -88,12 +88,40 @@ export default function Home() {
 
         {/* RIGHT SIDE */}
         <div>
-          <button
-            style={styles.connectBtn}
-            onClick={() => setOpenCompanyModal(true)}
-          >
-            Connect Company
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+  {activeAddress ? (
+    <>
+      <div style={{ fontWeight: 600, color: '#0f172a' }}>
+        {matchedInstitution?.name || 'Unknown Company'}
+      </div>
+
+      <button
+        style={{
+          background: '#ef4444',
+          color: '#fff',
+          border: 'none',
+          padding: '8px 12px',
+          borderRadius: 6,
+          cursor: 'pointer',
+        }}
+        onClick={() => {
+          // disconnect all wallets
+          localStorage.removeItem('walletconnect')
+          window.location.reload()
+        }}
+      >
+        Disconnect
+      </button>
+    </>
+  ) : (
+    <button
+      style={styles.connectBtn}
+      onClick={() => setOpenCompanyModal(true)}
+    >
+      Connect Company
+    </button>
+  )}
+</div>
         </div>
 
       </header>
@@ -168,20 +196,20 @@ export default function Home() {
       />
 
       {/* MODALS */}
-      {showMint && (
-        <Modal title="Issue Experience Letter" onClose={() => setShowMint(false)}>
-          <MintDegreeForm goBack={() => setShowMint(false)} wallet={matchedInstitution} />
+      {showProforma && (
+        <Modal title="Issue Experience Letter" onClose={() => setShowProforma(false)}>
+          <SemesterProformaBatchMint goBack={() => setShowProforma(false)} wallet={matchedInstitution} />
         </Modal>
       )}
 
-      {showVerify && (
-        <Modal title="Verify Experience Letter" onClose={() => setShowVerify(false)}>
-          <VerifyDegreeForm goBack={() => setShowVerify(false)} />
+      {showPrintProforma && (
+        <Modal title="Verify Experience Letter" onClose={() => setShowPrintProforma(false)}>
+          <PrintProforma goBack={() => setShowPrintProforma(false)} />
         </Modal>
       )}
 
       {showPartners && (
-        <Modal title="Partner Institutions" onClose={() => setShowPartners(false)}>
+        <Modal title="Partners" onClose={() => setShowPartners(false)}>
           <PartnerInstitutions />
         </Modal>
       )}

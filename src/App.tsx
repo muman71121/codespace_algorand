@@ -5,8 +5,6 @@ import { getAlgodConfigFromViteEnvironment } from './utils/network/getAlgoClient
 
 // Pages
 import Home from './pages/home'
-import ExperienceDashboard from './pages/Letter-Chained' // renamed conceptually
-import LMS from './pages/lms'
 
 const supportedWallets: SupportedWallet[] = [
   { id: WalletId.PERA },
@@ -40,8 +38,6 @@ export default function App() {
         <Router>
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/dashboard" element={<ExperienceDashboard />} />
-            <Route path="/lms" element={<LMS />} />
           </Routes>
         </Router>
       </WalletProvider>
