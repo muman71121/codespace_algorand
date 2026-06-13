@@ -280,7 +280,6 @@ export default function ExperienceLetterBatchMint({
   return (
     <div className="flex flex-col gap-4">
       <h2 className="text-xl font-bold">
-        Experience Letter Issuing DApp
       </h2>
 
       <div className="text-sm">
