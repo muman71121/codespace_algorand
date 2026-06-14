@@ -161,7 +161,7 @@ const metadata = JSON.parse(noteStr)
     )
 
     setData(decrypted)
-    setStatus('✅ Verified & decrypted successfully')
+    setStatus(' Verified & decrypted successfully')
   } catch (e: any) {
     console.error(e)
     setStatus(`❌ ${e.message}`)
@@ -186,7 +186,7 @@ const metadata = JSON.parse(noteStr)
       link.download = `experience_letter_${name}.png`
       link.click()
     } catch (e: any) {
-      setStatus(`❌ Print failed: ${e.message}`)
+      setStatus(` Print failed: ${e.message}`)
     }
   }
 
@@ -194,7 +194,7 @@ const metadata = JSON.parse(noteStr)
   return (
     <div className="p-6 max-w-3xl mx-auto">
       <h2 className="text-xl font-bold mb-4">
-        🏢 Experience Letter Verification & Print
+         Experience Letter Verification & Print
       </h2>
 
       <input
