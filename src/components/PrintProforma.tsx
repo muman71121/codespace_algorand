@@ -5,6 +5,7 @@ import domtoimage from 'dom-to-image-more'
 import { registeredInstitutions } from '../utils/registeredinstitutions'
 import { CONFIG } from '../configure/network'
 
+
 // ---------------- HASH (same style as proforma) ----------------
 function formatExperienceData(
   name: string,

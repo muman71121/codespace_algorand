@@ -204,7 +204,7 @@ export default function Home() {
 
       {showPrintProforma && (
         <Modal title="Verify Experience Letter" onClose={() => setShowPrintProforma(false)}>
-          <PrintProforma goBack={() => setShowPrintProforma(false)} />
+          <PrintProforma />
         </Modal>
       )}
 
